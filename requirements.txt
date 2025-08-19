@@ -1,0 +1,49 @@
+# fastapi
+# uvicorn[standard]
+# pydantic
+# PyMuPDF
+# google-cloud-aiplatform
+# vertexai
+# python-multipart
+# llama-index
+# llama-index-vector-stores-vertexaivectorsearch
+# llama-index-embeddings-huggingface
+# sentence-transformers
+# torch
+
+# requirements.txt
+# Core FastAPI dependencies
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pydantic-settings
+
+# Google Cloud and Vertex AI
+google-cloud-aiplatform
+vertexai
+
+# LlamaIndex for RAG
+llama-index
+llama-index-vector-stores-vertexaivectorsearch
+llama-index-embeddings-huggingface
+
+# PDF Processing
+PyMuPDF
+# Machine Learning
+transformers
+torch
+sentence-transformers
+
+# Utilities
+python-dotenv
+aiofiles
+
+# Monitoring and Logging (optional but recommended)
+prometheus-client
+python-json-logger
+
+# Testing (optional, for development)
+pytest
+pytest-asyncio
+httpx
