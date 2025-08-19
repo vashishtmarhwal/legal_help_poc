@@ -28,3 +28,5 @@ EXPOSE 8000
 # This tells the container how to start the FastAPI server with Uvicorn.
 # We use src.main:app because our main.py file is inside the 'src' directory.
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# CMD ["python", "src/test_indexing.py"]

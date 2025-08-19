@@ -1,16 +1,3 @@
-# fastapi
-# uvicorn[standard]
-# pydantic
-# PyMuPDF
-# google-cloud-aiplatform
-# vertexai
-# python-multipart
-# llama-index
-# llama-index-vector-stores-vertexaivectorsearch
-# llama-index-embeddings-huggingface
-# sentence-transformers
-# torch
-
 # requirements.txt
 # Core FastAPI dependencies
 fastapi
@@ -23,17 +10,25 @@ pydantic-settings
 google-cloud-aiplatform
 vertexai
 
-# LlamaIndex for RAG
+# LangChain for RAG and Vector Search
+langchain
+langchain-core
+langchain-google-vertexai
+langchain-community
+
+# LlamaIndex for Vector Store
 llama-index
 llama-index-vector-stores-vertexaivectorsearch
 llama-index-embeddings-huggingface
 
 # PDF Processing
 PyMuPDF
+
 # Machine Learning
 transformers
 torch
 sentence-transformers
+numpy
 
 # Utilities
 python-dotenv
