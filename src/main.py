@@ -11,9 +11,7 @@ import uvicorn
 import vertexai
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from llama_index.core import Settings
 from llama_index.core.node_parser import SimpleNodeParser
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from vertexai.generative_models import (
     GenerationConfig,
     GenerativeModel,
@@ -30,8 +28,6 @@ import src.dependencies as deps
 # GOOGLE_APPLICATION_CREDENTIALS should point to service account key file
 # GOOGLE_CLOUD_PROJECT should be set to your project ID
 
-credentials, project_id = google.auth.default()
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -42,8 +38,22 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Legal Document Assistant API...")
 
     try:
+        # Try to load Google Cloud credentials
+        try:
+            import os
+            creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+            if creds_path and os.path.exists(creds_path):
+                credentials, project_id = google.auth.default()
+                logger.info("Google Cloud credentials loaded successfully")
+            else:
+                logger.warning("Google Cloud credentials file not found - service will run with limited functionality")
+                logger.info("To enable full functionality, provide valid service account credentials")
+        except Exception as cred_error:
+            logger.warning(f"Google Cloud credentials not available: {type(cred_error).__name__}")
+            logger.warning("Service will run with limited functionality")
+        
         vertexai.init(project=settings.google_cloud_project, location=settings.location)
-        logger.info(f"✅ Vertex AI initialized (project={settings.google_cloud_project})")
+        logger.info(f"Vertex AI initialized (project={settings.google_cloud_project})")
 
         safety_settings = [
             SafetySetting(
@@ -72,14 +82,10 @@ async def lifespan(app: FastAPI):
             model_name=settings.model_name,
             safety_settings=safety_settings,
         )
-        logger.info(f"✅ Model {settings.model_name} initialized")
+        logger.info(f"Model {settings.model_name} initialized")
 
         try:
-            Settings.embed_model = HuggingFaceEmbedding(
-                model_name=settings.embedding_model,
-                trust_remote_code=True,
-            )
-            logger.info(f"✅ Embedding model {settings.embedding_model} configured")
+            logger.info("Using Vertex AI Vector Search for embeddings")
 
             if not settings.gcs_staging_bucket:
                 raise ValueError("GCS_STAGING_BUCKET is required for document storage functionality")
@@ -90,18 +96,11 @@ async def lifespan(app: FastAPI):
                 bucket = storage_client.bucket(settings.gcs_staging_bucket)
 
                 list(bucket.list_blobs(max_results=1))
-                logger.info(f"✅ GCS bucket {settings.gcs_staging_bucket} is accessible")
+                logger.info(f"GCS bucket {settings.gcs_staging_bucket} is accessible")
 
             except Exception as bucket_error:
                 error_msg = f"GCS bucket access failed: {bucket_error}"
-                logger.error(f"❌ {error_msg}")
-                logger.error("❌ Document storage requires GCS bucket access. Please ensure:")
-                logger.error(f"   1. Create the bucket: gsutil mb gs://{settings.gcs_staging_bucket}")
-                logger.error("   2. Grant service account permissions:")
-                logger.error(f"      gcloud projects add-iam-policy-binding {settings.google_cloud_project} \\")
-                logger.error("        --member='serviceAccount:la-datatonic-api-runner@alpine-alpha-469517-g8.iam.gserviceaccount.com' \\")
-                logger.error("        --role='roles/storage.admin'")
-                logger.error("   3. Or use an existing accessible bucket in .env")
+                logger.error(f"{error_msg}")
                 raise Exception(error_msg)
 
             deps.node_parser = SimpleNodeParser.from_defaults(
@@ -110,16 +109,16 @@ async def lifespan(app: FastAPI):
             )
 
             deps.vector_store_initialized = True
-            logger.info("✅ Document processing components initialized")
+            logger.info("Document processing components initialized")
 
         except Exception as ve:
-            logger.warning(f"⚠️ Document processing initialization failed: {ve!s}")
+            logger.warning(f"Document processing initialization failed: {ve!s}")
             deps.vector_store_initialized = False
 
         deps.is_initialized = True
 
     except Exception as e:
-        logger.error(f"❌ Startup failed: {e!s}")
+        logger.error(f"Startup failed: {e!s}")
         deps.is_initialized = False
         deps.vector_store_initialized = False
 

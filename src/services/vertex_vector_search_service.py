@@ -184,6 +184,146 @@ class VertexVectorSearchService:
         
         return status
     
+    async def _store_chunks_in_gcs(
+        self, 
+        document_id: str, 
+        filename: str, 
+        chunks: List[str], 
+        embeddings: List[List[float]], 
+        datapoints: List
+    ):
+        """Store chunk data and metadata in GCS for QA service retrieval"""
+        try:
+            from google.cloud import storage
+            import json
+            from datetime import datetime
+            
+            storage_client = storage.Client(project=self.project_id)
+            bucket = storage_client.bucket(settings.gcs_staging_bucket)
+            
+            # Prepare chunks data in the format expected by QA service
+            chunks_data = []
+            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                chunk_data = {
+                    "chunk_id": f"{document_id}_chunk_{i}",
+                    "document_id": document_id,
+                    "filename": filename,
+                    "chunk_index": i,
+                    "text": chunk,
+                    "embedding": embedding,
+                    "metadata": {
+                        "page_number": None,  # Could be enhanced to extract page numbers
+                        "upload_timestamp": datetime.utcnow().isoformat(),
+                    }
+                }
+                chunks_data.append(chunk_data)
+            
+            # Store chunks data
+            chunks_path = f"vector_search/{document_id}/chunks.json"
+            chunks_blob = bucket.blob(chunks_path)
+            chunks_blob.upload_from_string(json.dumps(chunks_data, indent=2))
+            
+            # Store document metadata
+            doc_metadata = {
+                "document_id": document_id,
+                "filename": filename,
+                "total_chunks": len(chunks),
+                "upload_timestamp": datetime.utcnow().isoformat(),
+                "embedding_model": "text-embedding-005",
+                "chunk_size": 1000,  # Default chunk size used
+                "chunk_overlap": 200,  # Default overlap used
+                "upload_method": "vector_search"
+            }
+            
+            metadata_path = f"vector_search/{document_id}/metadata.json"
+            metadata_blob = bucket.blob(metadata_path)
+            metadata_blob.upload_from_string(json.dumps(doc_metadata, indent=2))
+            
+            logger.info(f"Stored chunk data and metadata in GCS for document {document_id}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to store chunks in GCS for {document_id}: {e}")
+            # Don't fail the upload if GCS storage fails
+    
+    async def search_similar_documents(
+        self, 
+        question: str, 
+        max_results: int = 5,
+        similarity_threshold: float = 0.3
+    ) -> List[Dict]:
+        """Search for similar documents in Vector Search index using question embeddings"""
+        if not self.embedding_model:
+            raise Exception("Embedding model not initialized")
+        
+        try:
+            # Generate embedding for the question
+            question_embeddings = await self._generate_embeddings([question])
+            question_embedding = question_embeddings[0]
+            
+            logger.info(f"Generated question embedding with {len(question_embedding)} dimensions")
+            
+            # Perform similarity search using aiplatform MatchingEngineIndexEndpoint
+            from google.cloud import aiplatform
+            from google.cloud.aiplatform import MatchingEngineIndexEndpoint
+            
+            # Initialize aiplatform if not already done
+            aiplatform.init(project=self.project_id, location=self.location)
+            
+            # Create the full resource name for the index endpoint
+            endpoint_resource_name = f"projects/{self.project_id}/locations/{self.location}/indexEndpoints/{self.endpoint_id}"
+            
+            # Get the index endpoint using the resource name
+            endpoint = MatchingEngineIndexEndpoint(endpoint_resource_name)
+            
+            # Execute the query using the find_neighbors method
+            response = endpoint.find_neighbors(
+                deployed_index_id=self.deployed_index_id,
+                queries=[question_embedding],  # List of query vectors
+                num_neighbors=max_results * 2
+            )
+            
+            # Process results
+            results = []
+            if response:
+                # response is a list of lists (one per query)
+                # Each inner list contains MatchNeighbor objects
+                for query_neighbors in response:
+                    for neighbor in query_neighbors:
+                        # Get the distance/similarity score
+                        similarity_score = float(neighbor.distance)
+                        
+                        # Apply similarity threshold
+                        if similarity_score >= similarity_threshold:
+                            datapoint_id = neighbor.id
+                            
+                            # Parse the datapoint_id to extract metadata
+                            # Format: {document_id}_chunk_{chunk_index}
+                            parts = datapoint_id.split('_chunk_')
+                            document_id = parts[0] if len(parts) > 0 else ""
+                            chunk_index = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+                            
+                            result = {
+                                "document_id": document_id,
+                                "chunk_id": datapoint_id,
+                                "chunk_index": chunk_index,
+                                "similarity_score": similarity_score,
+                                # Note: Text content and filename would need to be retrieved
+                                # from the metadata stored during upload or from a separate store
+                                "text": "",  # Will be populated if we store text in restricts/crowding_tag
+                                "filename": "Unknown Document",  # Will be populated from metadata
+                            }
+                            results.append(result)
+                    
+                    # Only process the first query's results since we're sending one query
+                    break
+                
+            logger.info(f"Vector Search found {len(results)} relevant chunks")
+            return results[:max_results]  # Limit to requested number
+            
+        except Exception as e:
+            logger.error(f"Vector Search query failed: {e}")
+            raise Exception(f"Vector Search query failed: {e}")
+    
     async def upload_document_to_vector_search(
         self, 
         file_bytes: bytes, 
@@ -225,6 +365,9 @@ class VertexVectorSearchService:
             
             # Upload to Vector Search
             await self._upsert_datapoints(datapoints)
+            
+            # Store chunk data and metadata in GCS for QA service retrieval
+            await self._store_chunks_in_gcs(document_id, filename, chunks, embeddings, datapoints)
             
             processing_time = time.time() - start_time
             

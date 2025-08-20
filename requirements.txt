@@ -16,23 +16,20 @@ langchain-core
 langchain-google-vertexai
 langchain-community
 
-# LlamaIndex for Vector Store
-llama-index
+# LlamaIndex for document processing
+llama-index-core
 llama-index-vector-stores-vertexaivectorsearch
-llama-index-embeddings-huggingface
 
 # PDF Processing
 PyMuPDF
 
 # Machine Learning
-transformers
-torch
-sentence-transformers
 numpy
 
 # Utilities
 python-dotenv
 aiofiles
+requests
 
 # Monitoring and Logging (optional but recommended)
 prometheus-client

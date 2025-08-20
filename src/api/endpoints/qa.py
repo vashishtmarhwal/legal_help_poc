@@ -7,7 +7,7 @@ from ...dependencies import get_ai_model, get_vector_store_status
 from ...models.requests import QARequest
 from ...models.responses import QAResponse, SourceReference
 from ...services.ai_service import generate_contextual_answer
-from ...services.vector_service import search_relevant_documents
+from ...services.vector_search_qa_service import search_relevant_documents_vector_search, check_vector_search_readiness
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -23,15 +23,18 @@ async def ask_question(
 
     logger.info(f"Processing Q&A request: '{qa_request.question[:100]}{'...' if len(qa_request.question) > 100 else ''}'")
 
-    if not vector_store_initialized:
+    # Check if Vector Search is ready for QA operations
+    vector_search_ready = await check_vector_search_readiness()
+    
+    if not vector_search_ready:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Document processing is not available. Please upload documents first.",
+            detail="Vector Search service is not available. Please ensure the index is deployed and contains documents.",
         )
 
     try:
-        logger.info(f"Searching for relevant documents (max_sources={qa_request.max_sources}, threshold={qa_request.similarity_threshold})")
-        relevant_chunks, documents_searched = await search_relevant_documents(
+        logger.info(f"Searching Vector Search index (max_sources={qa_request.max_sources}, threshold={qa_request.similarity_threshold})")
+        relevant_chunks, documents_searched = await search_relevant_documents_vector_search(
             question=qa_request.question,
             max_sources=qa_request.max_sources,
             similarity_threshold=qa_request.similarity_threshold,
