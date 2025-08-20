@@ -4,6 +4,24 @@ from fastapi import HTTPException, UploadFile, status
 from ..config import settings
 
 
+def validate_pdf_file_bytes(file_bytes: bytes, filename: str) -> bytes:
+    """Validate PDF file from bytes"""
+    if len(file_bytes) == 0:
+        raise ValueError(f"File {filename} is empty")
+    
+    file_size_mb = len(file_bytes) / (1024 * 1024)
+    if file_size_mb > settings.max_file_size_mb:
+        raise ValueError(f"File size ({file_size_mb:.2f} MB) exceeds maximum ({settings.max_file_size_mb} MB)")
+    
+    try:
+        test_doc = fitz.open(stream=file_bytes, filetype="pdf")
+        test_doc.close()
+    except Exception:
+        raise ValueError(f"File {filename} is not a valid PDF")
+    
+    return file_bytes
+
+
 async def validate_pdf_file(file: UploadFile) -> bytes:
     if file.content_type != "application/pdf":
         raise HTTPException(

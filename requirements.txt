@@ -31,6 +31,10 @@ python-dotenv
 aiofiles
 requests
 
+# Task Queue and Background Processing
+celery[redis]
+redis
+
 # Monitoring and Logging (optional but recommended)
 prometheus-client
 python-json-logger

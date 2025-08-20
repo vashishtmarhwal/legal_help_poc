@@ -403,6 +403,122 @@ class VertexVectorSearchService:
                 duplicate_of_document_id=None,
                 file_hash="",
             )
+    
+    async def delete_document_from_vector_search(self, document_id: str) -> Dict[str, any]:
+        """Delete all chunks of a document from Vector Search index"""
+        if not self.index_id:
+            raise Exception("Vector Search index ID not configured")
+        
+        try:
+            # Get the index
+            index = aiplatform.MatchingEngineIndex(self.index_id)
+            
+            # Find all datapoint IDs for this document
+            # Format: {document_id}_chunk_{i}
+            # Since Vector Search doesn't support listing all datapoints,
+            # we'll need to know the chunk IDs to delete them
+            # For now, we'll try to delete up to 1000 chunks (should be more than enough)
+            
+            datapoint_ids_to_remove = []
+            for i in range(1000):  # Max chunks to try
+                chunk_id = f"{document_id}_chunk_{i}"
+                datapoint_ids_to_remove.append(chunk_id)
+            
+            logger.info(f"Attempting to remove datapoints for document {document_id}")
+            
+            # Remove datapoints from index
+            index.remove_datapoints(datapoint_ids=datapoint_ids_to_remove)
+            
+            logger.info(f"Successfully removed datapoints for document {document_id}")
+            return {"status": "success", "document_id": document_id, "chunks_removed": "all"}
+            
+        except Exception as e:
+            logger.error(f"Failed to remove datapoints for document {document_id}: {e}")
+            raise
+    
+    async def delete_document_from_gcs(self, document_id: str) -> Dict[str, any]:
+        """Delete document data from GCS bucket"""
+        try:
+            from google.cloud import storage
+            
+            storage_client = storage.Client(project=self.project_id)
+            bucket = storage_client.bucket(settings.gcs_staging_bucket)
+            
+            # Delete all blobs with the document_id prefix
+            prefix = f"vector_search/{document_id}/"
+            blobs = list(bucket.list_blobs(prefix=prefix))
+            
+            deleted_files = []
+            for blob in blobs:
+                blob.delete()
+                deleted_files.append(blob.name)
+                logger.info(f"Deleted GCS blob: {blob.name}")
+            
+            logger.info(f"Successfully deleted {len(deleted_files)} files for document {document_id}")
+            return {
+                "status": "success", 
+                "document_id": document_id, 
+                "files_deleted": len(deleted_files),
+                "deleted_files": deleted_files
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to delete GCS data for document {document_id}: {e}")
+            raise
+    
+    async def delete_all_documents_from_vector_search(self) -> Dict[str, any]:
+        """Delete all documents from Vector Search index (cleanup entire index)"""
+        if not self.index_id:
+            raise Exception("Vector Search index ID not configured")
+        
+        try:
+            # Get the index
+            index = aiplatform.MatchingEngineIndex(self.index_id)
+            
+            # Note: Vector Search doesn't provide a direct way to list all datapoints
+            # This is a more aggressive approach that would require recreating the index
+            # For now, we'll log a warning about this limitation
+            
+            logger.warning("Complete index cleanup not implemented - Vector Search doesn't support listing all datapoints")
+            logger.info("To completely clean the index, consider recreating it through the Console or CLI")
+            
+            return {
+                "status": "warning", 
+                "message": "Complete index cleanup not supported - use delete by document_id instead"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to clean up Vector Search index: {e}")
+            raise
+    
+    async def delete_all_documents_from_gcs(self) -> Dict[str, any]:
+        """Delete all document data from GCS bucket"""
+        try:
+            from google.cloud import storage
+            
+            storage_client = storage.Client(project=self.project_id)
+            bucket = storage_client.bucket(settings.gcs_staging_bucket)
+            
+            # Delete all blobs with the vector_search prefix
+            prefix = "vector_search/"
+            blobs = list(bucket.list_blobs(prefix=prefix))
+            
+            deleted_files = []
+            for blob in blobs:
+                blob.delete()
+                deleted_files.append(blob.name)
+                logger.info(f"Deleted GCS blob: {blob.name}")
+            
+            logger.info(f"Successfully deleted all {len(deleted_files)} vector search files from GCS")
+            return {
+                "status": "success", 
+                "files_deleted": len(deleted_files),
+                "deleted_files": deleted_files
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to delete all GCS vector search data: {e}")
+            raise
 
 
 # Global service instance

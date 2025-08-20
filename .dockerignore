@@ -1,0 +1,25 @@
+# Ignore development and local files
+.env
+.env.local
+.env.development
+.env.test
+credentials.json
+*.pyc
+__pycache__/
+.pytest_cache/
+.coverage
+.git/
+.gitignore
+README.md
+.DS_Store
+*.log
+logs/
+monitoring_data/
+test_*.py
+.vscode/
+.idea/
+
+# Ignore Docker files in the container
+Dockerfile
+.dockerignore
+docker-compose.yml
