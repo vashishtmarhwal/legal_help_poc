@@ -26,7 +26,9 @@ from .api import api_router
 from .config import settings
 import src.dependencies as deps
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.join(os.path.dirname(os.path.dirname(__file__)), "credentials.json")
+# Google Cloud credentials should be set via environment variables
+# GOOGLE_APPLICATION_CREDENTIALS should point to service account key file
+# GOOGLE_CLOUD_PROJECT should be set to your project ID
 
 credentials, project_id = google.auth.default()
 

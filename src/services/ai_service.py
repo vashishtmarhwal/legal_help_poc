@@ -6,12 +6,10 @@ from fastapi import HTTPException, status
 from vertexai.generative_models import GenerationConfig
 
 from ..models.responses import ExtractedInvoice
-from ..monitoring.token_tracker import track_tokens
 
 logger = logging.getLogger(__name__)
 
 
-@track_tokens(endpoint="extract_entities", model_param="model", content_param="text")
 async def extract_entities_with_ai(text: str, model) -> ExtractedInvoice:
     if not model:
         raise HTTPException(
@@ -55,6 +53,14 @@ Text:
             generation_config=generation_config,
         )
 
+        # Track tokens immediately after response
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            from ..monitoring.simple_token_counter import simple_counter
+            total_tokens = response.usage_metadata.total_token_count
+            simple_counter.total_tokens += total_tokens
+            simple_counter.request_count += 1
+            logger.info(f"Tokens tracked - extract_entities: {total_tokens}, Session Total: {simple_counter.total_tokens}")
+
         json_text = response.text.strip()
         for prefix in ["```json", "```", "json"]:
             json_text = json_text.removeprefix(prefix)
@@ -90,7 +96,6 @@ Text:
         )
 
 
-@track_tokens(endpoint="generate_answer", model_param="model", content_param="question")
 async def generate_contextual_answer(question: str, relevant_chunks: List[Dict], include_context: bool, model) -> Tuple[str, float]:
     if not model:
         raise HTTPException(
@@ -153,6 +158,14 @@ Answer:"""
             prompt,
             generation_config=generation_config,
         )
+
+        # Track tokens immediately after response
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            from ..monitoring.simple_token_counter import simple_counter
+            total_tokens = response.usage_metadata.total_token_count
+            simple_counter.total_tokens += total_tokens
+            simple_counter.request_count += 1
+            logger.info(f"Tokens tracked - generate_answer: {total_tokens}, Session Total: {simple_counter.total_tokens}")
 
         answer = response.text.strip()
 

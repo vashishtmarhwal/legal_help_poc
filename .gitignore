@@ -1,0 +1,52 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
+
+# pyenv
+/.python-version
+
+
+# dotenv
+.env
+.env.*
+credentials.json
+
+# VS Code
+.vscode/
+.history/
+
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+app.log
+logs/
+
+
+
+# Docker
+docker-compose.override.yml
+*.local
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Secret / credentials
+*.pem
+*.key
+*.p12
+
+
+index/
+
+# Other caches
+.ruff_cache/
+.cache/
+
+
