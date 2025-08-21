@@ -51,9 +51,9 @@ class VertexVectorSearchService:
                 location=self.location,
                 http_options=HttpOptions(api_version="v1")
             )
-            logger.info(f"✅ Initialized embedding client for project: {self.project_id}")
+            logger.info(f"Initialized embedding client for project: {self.project_id}")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize embedding model: {e}")
+            logger.error(f"Failed to initialize embedding model: {e}")
             self.embedding_model = None
     
     def _chunk_text(self, text: str, chunk_size: int = None, chunk_overlap: int = None) -> List[str]:
