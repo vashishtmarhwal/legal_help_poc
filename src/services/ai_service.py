@@ -17,25 +17,11 @@ async def extract_entities_with_ai(text: str, model) -> ExtractedInvoice:
             detail="AI model is not available",
         )
 
-    prompt = f"""Extract the following information from this legal invoice text and return as a SINGLE JSON object:
+    prompt = f"""Extract legal invoice data as JSON:
 
-Required fields:
-- vendor_name: Law firm or vendor name
-- invoice_number: Invoice number/ID
-- invoice_date: Invoice date
-- professional_fees: Subtotal before tax/discounts
-- discounts: Total discounts applied
-- tax_amount: Total tax charged
-- total_amount: Final total due
-- line_items: Array of billing entries with:
-  - date: Work performed date
-  - timekeeper_name: Person who did work
-  - timekeeper_role: Title (Partner, Associate, etc.)
-  - description: Work description
-  - hours_worked: Hours billed
-  - total_spent: Amount for line item
+Fields: vendor_name, invoice_number, invoice_date, professional_fees, discounts, tax_amount, total_amount, line_items[date, timekeeper_name, timekeeper_role, description, hours_worked, total_spent]
 
-Return ONLY a single JSON object (not an array). Use null for missing fields.
+Return single JSON object, null for missing fields.
 
 Text:
 {text[:30000]}"""
@@ -121,30 +107,26 @@ async def generate_contextual_answer(question: str, relevant_chunks: List[Dict],
         context = "\n".join(context_parts) if context_parts else "No relevant context found."
 
         if include_context and relevant_chunks:
-            prompt = f"""You are a legal document assistant. Answer the user's question based on the provided document context. 
+            prompt = f"""Legal assistant. Answer using provided context.
 
-Context from Legal Documents:
+Context:
 {context}
 
-User Question: {question}
+Question: {question}
 
 Instructions:
-1. Provide a comprehensive answer based primarily on the provided context
-2. If the context doesn't fully address the question, clearly state what information is missing
-3. Cite specific sources when referencing information
-4. Use professional legal language appropriate for the context
-5. If no relevant information or chunks are found, clearly state this limitation and do not provide a generic answer
+• Base answer on context above
+• State if information missing
+• Cite sources when referencing
+• Use professional language
 
 Answer:"""
         else:
-            prompt = f"""You are a legal document assistant. Answer the following question using your general knowledge about legal matters:
+            prompt = f"""Legal assistant. Answer using general legal knowledge.
 
-User Question: {question}
+Question: {question}
 
-Instructions:
-1. Provide a helpful and accurate answer
-2. Use professional legal language
-3. If you're uncertain about legal specifics, recommend consulting with a qualified attorney
+Use professional language. If uncertain, recommend consulting an attorney.
 
 Answer:"""
 
