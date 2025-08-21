@@ -13,9 +13,13 @@ class AppSettings(BaseSettings):
     # Optional credentials with defaults if not in .env
     max_file_size_mb: int = Field(default=50, env="MAX_FILE_SIZE_MB")
     gcs_staging_bucket: Optional[str] = Field(default=None, env="GCS_STAGING_BUCKET")
-    chunk_size: int = Field(default=512, env="CHUNK_SIZE")
+    chunk_size: int = Field(default=1000, env="CHUNK_SIZE")  # Increased for semantic chunking
     chunk_overlap: int = Field(default=50, env="CHUNK_OVERLAP")
-    admin_api_key: Optional[str] = Field(default=None, env="AD MIN_API_KEY")
+    admin_api_key: Optional[str] = Field(default=None, env="ADMIN_API_KEY")
+    
+    # Semantic Chunking Settings
+    semantic_min_chunk_size: int = Field(default=200, env="SEMANTIC_MIN_CHUNK_SIZE")
+    semantic_overlap_percentage: float = Field(default=0.15, env="SEMANTIC_OVERLAP_PERCENTAGE")
     
     # Monitoring settings
     enable_token_tracking: bool = Field(default=True, env="ENABLE_TOKEN_TRACKING")

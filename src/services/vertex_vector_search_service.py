@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime
@@ -56,35 +57,206 @@ class VertexVectorSearchService:
             logger.error(f"Failed to initialize embedding model: {e}")
             self.embedding_model = None
     
-    def _chunk_text(self, text: str, chunk_size: int = None, chunk_overlap: int = None) -> List[str]:
-        """Split text into chunks for embedding"""
+    def _chunk_text(self, text: str, chunk_size: int = None, chunk_overlap: int = None) -> List[Dict]:
+        """Split text into semantic chunks for embedding"""
         chunk_size = chunk_size or settings.chunk_size
-        chunk_overlap = chunk_overlap or settings.chunk_overlap
+        min_chunk_size = settings.semantic_min_chunk_size
+        overlap_percentage = settings.semantic_overlap_percentage
         
         if len(text) <= chunk_size:
-            return [text]
+            return [self._create_chunk_dict(text, 0, len(text), self._classify_chunk_type(text))]
         
+        # Step 1: Preprocess text for legal documents
+        cleaned_text = self._preprocess_legal_text(text)
+        
+        # Step 2: Find semantic boundaries
+        boundaries = self._find_semantic_boundaries(cleaned_text, chunk_size)
+        
+        # Step 3: Create chunks from boundaries
+        chunks = self._create_chunks_from_boundaries(cleaned_text, boundaries, chunk_size, min_chunk_size)
+        
+        # Step 4: Add intelligent overlaps
+        final_chunks = self._add_semantic_overlaps(chunks, overlap_percentage)
+        
+        return final_chunks
+    
+    def _create_chunk_dict(self, text: str, start: int, end: int, semantic_type: str) -> Dict:
+        """Create a standardized chunk dictionary"""
+        return {
+            'text': text.strip(),
+            'semantic_type': semantic_type,
+            'start_position': start,
+            'end_position': end
+        }
+    
+    def _preprocess_legal_text(self, text: str) -> str:
+        """Clean and normalize legal document text"""
+        # Remove excessive whitespace while preserving structure
+        text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+        # Normalize spaces but preserve paragraph structure
+        text = re.sub(r'[ \t]+', ' ', text)
+        # Preserve important legal clause separators
+        text = re.sub(r'(WHEREAS[^:]*:)', r'\n\n\1', text, flags=re.IGNORECASE)
+        text = re.sub(r'(NOW THEREFORE[^:]*:)', r'\n\n\1', text, flags=re.IGNORECASE)
+        return text.strip()
+    
+    def _find_semantic_boundaries(self, text: str, max_chunk_size: int) -> List[int]:
+        """Find optimal positions to split text while preserving legal meaning"""
+        boundaries = [0]  # Start of document
+        
+        # Legal document patterns for section detection
+        section_patterns = [
+            r'^\d+\.\s+[A-Z][^.]*$',  # "1. TERMS AND CONDITIONS"
+            r'^Section\s+\d+[:.\s]',   # "Section 1:"
+            r'^Article\s+[IVX\d]+',     # "Article I"
+            r'^[A-Z][A-Z\s]{5,}:',      # "WHEREAS:"
+        ]
+        
+        # Find section headers
+        lines = text.split('\n')
+        current_pos = 0
+        
+        for line in lines:
+            line_start = current_pos
+            current_pos += len(line) + 1  # +1 for newline
+            
+            for pattern in section_patterns:
+                if re.match(pattern, line.strip(), re.IGNORECASE):
+                    boundaries.append(line_start)
+                    break
+        
+        # Add paragraph boundaries for long sections
+        paragraph_breaks = [m.start() for m in re.finditer(r'\n\s*\n', text)]
+        boundaries.extend(paragraph_breaks)
+        
+        # Add sentence boundaries only where needed (for very long paragraphs)
+        sentence_ends = [m.end() for m in re.finditer(r'[.!?]\s+[A-Z]', text)]
+        for sentence_pos in sentence_ends:
+            # Only add if there's no recent boundary
+            recent_boundary = max([b for b in boundaries if b <= sentence_pos], default=0)
+            if sentence_pos - recent_boundary > max_chunk_size * 0.8:
+                boundaries.append(sentence_pos)
+        
+        # Sort, deduplicate, and add end
+        boundaries = sorted(list(set(boundaries)))
+        boundaries.append(len(text))
+        
+        return boundaries
+    
+    def _create_chunks_from_boundaries(self, text: str, boundaries: List[int], max_size: int, min_size: int) -> List[Dict]:
+        """Create chunks respecting semantic boundaries"""
         chunks = []
-        start = 0
+        i = 0
         
-        while start < len(text):
-            end = start + chunk_size
-            chunk = text[start:end]
+        while i < len(boundaries) - 1:
+            start = boundaries[i]
+            end = boundaries[i + 1]
+            chunk_text = text[start:end].strip()
             
-            # Try to break at word boundaries
-            if end < len(text):
-                last_space = chunk.rfind(' ')
-                if last_space > chunk_size * 0.8:  # Only break if reasonably close to end
-                    chunk = chunk[:last_space]
-                    end = start + last_space
+            # Skip very small chunks by merging with next if possible
+            if len(chunk_text) < min_size and i + 2 < len(boundaries):
+                next_end = boundaries[i + 2]
+                merged_text = text[start:next_end].strip()
+                if len(merged_text) <= max_size:
+                    chunk_text = merged_text
+                    end = next_end
+                    i += 1  # Skip the next boundary
             
-            chunks.append(chunk.strip())
-            start = end - chunk_overlap
+            # Only process if chunk is meaningful
+            if len(chunk_text.strip()) > 0:
+                # Split oversized chunks
+                if len(chunk_text) > max_size:
+                    sub_chunks = self._split_large_chunk(chunk_text, start, max_size)
+                    chunks.extend(sub_chunks)
+                elif len(chunk_text) >= min_size:
+                    chunks.append(self._create_chunk_dict(chunk_text, start, end, self._classify_chunk_type(chunk_text)))
+                else:
+                    # For very small chunks that couldn't be merged, still include them if they have content
+                    if len(chunk_text.strip()) >= 20:  # Minimum meaningful content
+                        chunks.append(self._create_chunk_dict(chunk_text, start, end, self._classify_chunk_type(chunk_text)))
             
-            if start >= len(text):
-                break
+            i += 1
         
-        return [chunk for chunk in chunks if chunk.strip()]
+        return chunks
+    
+    def _split_large_chunk(self, text: str, start_offset: int, max_size: int) -> List[Dict]:
+        """Split oversized chunks at sentence boundaries"""
+        sentences = list(re.finditer(r'[.!?]\s+', text))
+        
+        if not sentences:
+            # Fallback to word boundaries
+            words = text.split()
+            mid_point = len(words) // 2
+            split_pos = len(' '.join(words[:mid_point]))
+        else:
+            # Find best sentence boundary near middle
+            target_pos = len(text) // 2
+            best_sentence = min(sentences, key=lambda s: abs(s.end() - target_pos))
+            split_pos = best_sentence.end()
+        
+        return [
+            self._create_chunk_dict(text[:split_pos], start_offset, start_offset + split_pos, self._classify_chunk_type(text[:split_pos])),
+            self._create_chunk_dict(text[split_pos:], start_offset + split_pos, start_offset + len(text), self._classify_chunk_type(text[split_pos:]))
+        ]
+    
+    def _classify_chunk_type(self, text: str) -> str:
+        """Classify the semantic type of a text chunk"""
+        text_lower = text.lower()
+        
+        if re.search(r'\bwhereas\b', text_lower):
+            return 'whereas_clause'
+        elif re.search(r'\bnow therefore\b', text_lower):
+            return 'therefore_clause'
+        elif re.search(r'\b(payment|fee|cost|amount|\$)\b', text_lower):
+            return 'financial_clause'
+        elif re.search(r'\b(termination|expire|end|cancel)\b', text_lower):
+            return 'termination_clause'
+        elif re.search(r'\b(liability|responsible|damages|indemnif)\b', text_lower):
+            return 'liability_clause'
+        elif re.search(r'\b(definition|means|defined as|shall mean)\b', text_lower):
+            return 'definition'
+        elif re.search(r'^\d+\.', text.strip()):
+            return 'numbered_section'
+        elif re.search(r'\b(confidential|proprietary|intellectual property)\b', text_lower):
+            return 'confidentiality_clause'
+        else:
+            return 'general_clause'
+    
+    def _add_semantic_overlaps(self, chunks: List[Dict], overlap_percentage: float) -> List[Dict]:
+        """Add intelligent overlaps between chunks"""
+        if not chunks:
+            return chunks
+        
+        for i in range(len(chunks)):
+            chunk_text = chunks[i]['text']
+            
+            # Add overlap with previous chunk
+            if i > 0:
+                prev_chunk = chunks[i - 1]
+                overlap_size = int(len(prev_chunk['text']) * overlap_percentage)
+                if overlap_size > 0:
+                    prev_overlap = prev_chunk['text'][-overlap_size:].strip()
+                    # Find word boundary for clean overlap
+                    first_space = prev_overlap.find(' ')
+                    if first_space > 0:
+                        prev_overlap = prev_overlap[first_space:].strip()
+                    if prev_overlap:
+                        chunks[i]['text'] = f"{prev_overlap} {chunk_text}"
+            
+            # Add overlap with next chunk
+            if i < len(chunks) - 1:
+                next_chunk = chunks[i + 1]
+                overlap_size = int(len(next_chunk['text']) * overlap_percentage)
+                if overlap_size > 0:
+                    next_overlap = next_chunk['text'][:overlap_size].strip()
+                    # Find word boundary for clean overlap
+                    last_space = next_overlap.rfind(' ')
+                    if last_space > 0:
+                        next_overlap = next_overlap[:last_space].strip()
+                    if next_overlap:
+                        chunks[i]['text'] = f"{chunks[i]['text']} {next_overlap}"
+        
+        return chunks
     
     async def _generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for a list of texts using Gemini API"""
@@ -188,11 +360,11 @@ class VertexVectorSearchService:
         self, 
         document_id: str, 
         filename: str, 
-        chunks: List[str], 
+        chunk_dicts: List[Dict], 
         embeddings: List[List[float]], 
         datapoints: List
     ):
-        """Store chunk data and metadata in GCS for QA service retrieval"""
+        """Store semantic chunk data and metadata in GCS for QA service retrieval"""
         try:
             from google.cloud import storage
             import json
@@ -201,19 +373,23 @@ class VertexVectorSearchService:
             storage_client = storage.Client(project=self.project_id)
             bucket = storage_client.bucket(settings.gcs_staging_bucket)
             
-            # Prepare chunks data in the format expected by QA service
+            # Prepare enhanced chunks data in the format expected by QA service
             chunks_data = []
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            for i, (chunk_dict, embedding) in enumerate(zip(chunk_dicts, embeddings)):
                 chunk_data = {
                     "chunk_id": f"{document_id}_chunk_{i}",
                     "document_id": document_id,
                     "filename": filename,
                     "chunk_index": i,
-                    "text": chunk,
+                    "text": chunk_dict['text'],
                     "embedding": embedding,
+                    "semantic_type": chunk_dict['semantic_type'],
+                    "start_position": chunk_dict['start_position'],
+                    "end_position": chunk_dict['end_position'],
                     "metadata": {
                         "page_number": None,  # Could be enhanced to extract page numbers
                         "upload_timestamp": datetime.utcnow().isoformat(),
+                        "chunking_strategy": "semantic"
                     }
                 }
                 chunks_data.append(chunk_data)
@@ -223,15 +399,19 @@ class VertexVectorSearchService:
             chunks_blob = bucket.blob(chunks_path)
             chunks_blob.upload_from_string(json.dumps(chunks_data, indent=2))
             
-            # Store document metadata
+            # Store enhanced document metadata
+            semantic_types = list(set(chunk_dict['semantic_type'] for chunk_dict in chunk_dicts))
             doc_metadata = {
                 "document_id": document_id,
                 "filename": filename,
-                "total_chunks": len(chunks),
+                "total_chunks": len(chunk_dicts),
                 "upload_timestamp": datetime.utcnow().isoformat(),
                 "embedding_model": "text-embedding-005",
-                "chunk_size": 1000,  # Default chunk size used
-                "chunk_overlap": 200,  # Default overlap used
+                "chunk_size": settings.chunk_size,
+                "min_chunk_size": settings.semantic_min_chunk_size,
+                "overlap_percentage": settings.semantic_overlap_percentage,
+                "chunking_strategy": "semantic",
+                "semantic_types": semantic_types,
                 "upload_method": "vector_search"
             }
             
@@ -340,23 +520,29 @@ class VertexVectorSearchService:
             if not text.strip():
                 raise Exception(f"No text found in PDF: {filename}")
             
-            # Chunk the text
-            chunks = self._chunk_text(text)
-            logger.info(f"Created {len(chunks)} chunks for {filename}")
+            # Chunk the text using semantic chunking
+            chunk_dicts = self._chunk_text(text)
+            logger.info(f"Created {len(chunk_dicts)} semantic chunks for {filename}")
+            
+            # Extract text for embeddings
+            chunk_texts = [chunk_dict['text'] for chunk_dict in chunk_dicts]
             
             # Generate embeddings for all chunks
-            embeddings = await self._generate_embeddings(chunks)
+            embeddings = await self._generate_embeddings(chunk_texts)
             
             # Create datapoints
             datapoints = []
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            for i, (chunk_dict, embedding) in enumerate(zip(chunk_dicts, embeddings)):
                 chunk_id = f"{document_id}_chunk_{i}"
                 metadata = {
                     "filename": filename,
                     "document_id": document_id,
                     "chunk_id": chunk_id,
                     "chunk_index": i,
-                    "chunk_text": chunk,
+                    "chunk_text": chunk_dict['text'],
+                    "semantic_type": chunk_dict['semantic_type'],
+                    "start_position": chunk_dict['start_position'],
+                    "end_position": chunk_dict['end_position'],
                     "upload_timestamp": datetime.utcnow().isoformat(),
                 }
                 
@@ -367,20 +553,20 @@ class VertexVectorSearchService:
             await self._upsert_datapoints(datapoints)
             
             # Store chunk data and metadata in GCS for QA service retrieval
-            await self._store_chunks_in_gcs(document_id, filename, chunks, embeddings, datapoints)
+            await self._store_chunks_in_gcs(document_id, filename, chunk_dicts, embeddings, datapoints)
             
             processing_time = time.time() - start_time
             
             logger.info(
                 f"Successfully uploaded {filename} to Vector Search: "
-                f"{len(chunks)} chunks, {processing_time:.2f}s"
+                f"{len(chunk_dicts)} semantic chunks, {processing_time:.2f}s"
             )
             
             return VectorStoreUploadResult(
                 filename=filename,
                 document_id=document_id,
-                total_chunks=len(chunks),
-                successful_chunks=len(chunks),
+                total_chunks=len(chunk_dicts),
+                successful_chunks=len(chunk_dicts),
                 failed_chunks=0,
                 processing_time=processing_time,
                 is_duplicate=False,
