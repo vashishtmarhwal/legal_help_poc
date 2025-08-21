@@ -31,12 +31,6 @@ class AppSettings(BaseSettings):
     vector_search_endpoint_id: str = Field(..., env="VECTOR_SEARCH_ENDPOINT_ID")
     vector_search_deployed_index_id: str = Field(..., env="VECTOR_SEARCH_DEPLOYED_INDEX_ID")
     
-    # Task Queue settings
-    redis_url: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
-    celery_broker_url: str = Field(default="redis://localhost:6379/0", env="CELERY_BROKER_URL")
-    celery_result_backend: str = Field(default="redis://localhost:6379/0", env="CELERY_RESULT_BACKEND")
-    task_result_expires: int = Field(default=3600, env="TASK_RESULT_EXPIRES")
-
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
