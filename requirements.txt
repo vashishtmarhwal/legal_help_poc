@@ -8,7 +8,6 @@ pydantic-settings
 
 # Google Cloud and Vertex AI
 google-cloud-aiplatform
-google-cloud-spanner
 vertexai
 
 # LangChain for RAG and Vector Search

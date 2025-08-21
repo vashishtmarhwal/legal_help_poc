@@ -131,7 +131,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Legal Document Assistant API",
     description="API for parsing legal documents and extracting structured information",
-    version="3.0.0",
+    version="3.1.0",
     lifespan=lifespan,
 )
 
