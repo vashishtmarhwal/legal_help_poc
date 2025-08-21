@@ -17,12 +17,15 @@ services:
       # AI Model Configuration
       - MODEL_NAME=${MODEL_NAME:-gemini-2.0-flash-lite}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-005}
-      - HUGGINGFACE_EMBEDDING_MODEL=${HUGGINGFACE_EMBEDDING_MODEL:-sentence-transformers/all-mpnet-base-v2}
       
       # File Processing Configuration
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
-      - CHUNK_SIZE=${CHUNK_SIZE:-512}
+      - CHUNK_SIZE=${CHUNK_SIZE:-1000}
       - CHUNK_OVERLAP=${CHUNK_OVERLAP:-50}
+      
+      # Semantic Chunking Configuration
+      - SEMANTIC_MIN_CHUNK_SIZE=${SEMANTIC_MIN_CHUNK_SIZE:-200}
+      - SEMANTIC_OVERLAP_PERCENTAGE=${SEMANTIC_OVERLAP_PERCENTAGE:-0.15}
       
       # Google Cloud Storage
       - GCS_STAGING_BUCKET=${GCS_STAGING_BUCKET}
@@ -40,10 +43,16 @@ services:
       - VECTOR_SEARCH_ENDPOINT_ID=${VECTOR_SEARCH_ENDPOINT_ID}
       - VECTOR_SEARCH_DEPLOYED_INDEX_ID=${VECTOR_SEARCH_DEPLOYED_INDEX_ID}
       
-      # Task Queue Configuration
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # Spanner Graph Configuration
+      - SPANNER_INSTANCE_ID=${SPANNER_INSTANCE_ID}
+      - SPANNER_DATABASE_ID=${SPANNER_DATABASE_ID}
+      
+      # Optional: Logging Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Optional: Application Configuration
+      - HOST=${HOST:-0.0.0.0}
+      - PORT=${PORT:-8000}
     volumes:
       # Mount your service account credentials (REQUIRED)
       - ./credentials/service-account.json:/app/credentials/service-account.json:ro
@@ -51,8 +60,6 @@ services:
       - ./logs:/app/logs
       # Mount monitoring data directory
       - ./monitoring_data:/app/data
-    depends_on:
-      - redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -60,64 +67,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  redis:
-    image: redis:7-alpine
-    container_name: legal-assistant-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-
-  celery-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: legal-assistant-celery
-    command: celery -A src.tasks.celery_app worker --loglevel=info
-    environment:
-      # Google Cloud Configuration
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/service-account.json
-      - LOCATION=${LOCATION:-us-central1}
-      
-      # AI Model Configuration
-      - MODEL_NAME=${MODEL_NAME:-gemini-2.0-flash-lite}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-005}
-      
-      # File Processing Configuration
-      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
-      - CHUNK_SIZE=${CHUNK_SIZE:-512}
-      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-50}
-      
-      # Google Cloud Storage
-      - GCS_STAGING_BUCKET=${GCS_STAGING_BUCKET}
-      
-      # Vertex AI Vector Search Configuration
-      - VECTOR_SEARCH_INDEX_ID=${VECTOR_SEARCH_INDEX_ID}
-      - VECTOR_SEARCH_ENDPOINT_ID=${VECTOR_SEARCH_ENDPOINT_ID}
-      - VECTOR_SEARCH_DEPLOYED_INDEX_ID=${VECTOR_SEARCH_DEPLOYED_INDEX_ID}
-      
-      # Task Queue Configuration
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    volumes:
-      # Mount your service account credentials (REQUIRED)
-      - ./credentials/service-account.json:/app/credentials/service-account.json:ro
-      # Mount logs directory
-      - ./logs:/app/logs
-      # Mount monitoring data directory
-      - ./monitoring_data:/app/data
-    depends_on:
-      - redis
-    restart: unless-stopped
-
-volumes:
-  redis_data:

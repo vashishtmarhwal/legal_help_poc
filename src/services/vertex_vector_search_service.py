@@ -15,6 +15,8 @@ from ..config import settings
 from ..models.responses import VectorStoreUploadResult
 from ..monitoring.simple_token_counter import simple_counter
 from ..services.pdf_service import extract_text_from_pdf
+# from ..services.ai_service import extract_legal_entities_with_ai  # Removed Graph RAG
+# from ..services.spanner_graph_service import get_spanner_graph_service  # Removed Graph RAG
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +81,11 @@ class VertexVectorSearchService:
         final_chunks = self._add_semantic_overlaps(chunks, overlap_percentage)
         
         return final_chunks
+    
+    def _hash_file_content(self, file_bytes: bytes) -> str:
+        """Generate SHA256 hash of file content"""
+        import hashlib
+        return hashlib.sha256(file_bytes).hexdigest()
     
     def _create_chunk_dict(self, text: str, start: int, end: int, semantic_type: str) -> Dict:
         """Create a standardized chunk dictionary"""
@@ -507,7 +514,8 @@ class VertexVectorSearchService:
     async def upload_document_to_vector_search(
         self, 
         file_bytes: bytes, 
-        filename: str
+        filename: str,
+        enable_graph_storage: bool = True
     ) -> VectorStoreUploadResult:
         """Upload a document to Vertex AI Vector Search"""
         start_time = time.time()
@@ -554,6 +562,46 @@ class VertexVectorSearchService:
             
             # Store chunk data and metadata in GCS for QA service retrieval
             await self._store_chunks_in_gcs(document_id, filename, chunk_dicts, embeddings, datapoints)
+            
+            # NEW: Graph RAG Integration
+            if enable_graph_storage:
+                try:
+                    # Graph RAG functionality removed - skip entity extraction
+                    pass
+                    # import src.dependencies as deps
+                    # if hasattr(deps, 'model') and deps.model is not None:
+                    #     logger.info(f"Extracting legal entities for {filename}...")
+                    #     legal_extraction = await extract_legal_entities_with_ai(
+                    #         text, deps.model, document_id, filename
+                    #     )
+                    #     
+                    #     # Store in Spanner Graph
+                    #     graph_service = get_spanner_graph_service()
+                    #     file_hash = self._hash_file_content(file_bytes)
+                    #     
+                    #     graph_stored = await graph_service.store_document_graph(
+                    #         legal_extraction,
+                    #         file_size_bytes=len(file_bytes),
+                    #         file_hash=file_hash,
+                    #         total_chunks=len(chunk_dicts)
+                    #     )
+                    #     
+                    #     # Store chunk nodes with embeddings
+                    #     chunks_stored = await graph_service.store_chunk_nodes(
+                    #         document_id, chunk_dicts, embeddings
+                    #     )
+                    #     
+                    #     if graph_stored and chunks_stored:
+                    #         logger.info(f"Successfully stored graph data for {filename}")
+                    #     else:
+                    #         logger.warning(f"Failed to store some graph data for {filename}")
+                    #         
+                    # else:
+                    #     logger.warning("AI model not available - skipping legal entity extraction")
+                    #     
+                except Exception as graph_error:
+                    # Graph storage disabled
+                    pass
             
             processing_time = time.time() - start_time
             

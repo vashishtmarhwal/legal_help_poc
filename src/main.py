@@ -109,6 +109,7 @@ async def lifespan(app: FastAPI):
             )
 
             deps.vector_store_initialized = True
+
             logger.info("Document processing components initialized")
 
         except Exception as ve:

@@ -133,7 +133,7 @@ Instructions:
 2. If the context doesn't fully address the question, clearly state what information is missing
 3. Cite specific sources when referencing information
 4. Use professional legal language appropriate for the context
-5. If no relevant information is found, clearly state this limitation
+5. If no relevant information or chunks are found, clearly state this limitation and do not provide a generic answer
 
 Answer:"""
         else:
@@ -189,3 +189,5 @@ Answer:"""
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Answer generation failed: {e!s}",
         )
+
+

@@ -6,10 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from ...dependencies import get_ai_model, get_vector_store_status
 from ...models.requests import QARequest
 from ...models.responses import QAResponse, SourceReference
-from ...models.tasks import TaskResponse, TaskType, TaskStatus
 from ...services.ai_service import generate_contextual_answer
 from ...services.vector_search_qa_service import search_relevant_documents_vector_search, check_vector_search_readiness
-from ...tasks.processing_tasks import document_qa_task
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -98,58 +96,3 @@ async def ask_question(
         )
 
 
-@router.post("/ask-async/", response_model=TaskResponse)
-async def ask_question_async(qa_request: QARequest):
-    """
-    Ask a question about documents in the vector search index (Async Processing)
-    
-    This endpoint:
-    1. Validates the question
-    2. Creates a background task for Q&A processing
-    3. Returns a task ID immediately for status tracking
-    
-    Use the task endpoints to monitor progress and get results.
-    """
-    logger.info(f"Creating async Q&A task for question: '{qa_request.question[:50]}...'")
-    
-    # Basic validation
-    if not qa_request.question or not qa_request.question.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Question cannot be empty"
-        )
-    
-    # Check if Vector Search is ready for QA operations
-    vector_search_ready = await check_vector_search_readiness()
-    
-    if not vector_search_ready:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Vector Search service is not available. Please ensure the index is deployed and contains documents."
-        )
-    
-    try:
-        # Create background task
-        task = document_qa_task.delay(
-            question=qa_request.question,
-            max_results=qa_request.max_sources,
-            include_context=qa_request.include_context
-        )
-        
-        task_response = TaskResponse(
-            task_id=task.id,
-            task_type=TaskType.DOCUMENT_QA,
-            status=TaskStatus.PENDING,
-            message=f"Q&A task created for question: {qa_request.question[:50]}...",
-            status_url=f"/api/v1/tasks/{task.id}"
-        )
-        
-        logger.info(f"Created Q&A task {task.id} for question")
-        return task_response
-        
-    except Exception as e:
-        logger.error(f"Failed to create Q&A task: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create Q&A task: {e}"
-        )

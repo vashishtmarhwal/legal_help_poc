@@ -141,3 +141,4 @@ class ClearVectorStoreResponse(BaseModel):
     documents_deleted: int
     processing_time: float
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+

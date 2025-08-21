@@ -8,6 +8,7 @@ pydantic-settings
 
 # Google Cloud and Vertex AI
 google-cloud-aiplatform
+google-cloud-spanner
 vertexai
 
 # LangChain for RAG and Vector Search
@@ -15,6 +16,9 @@ langchain
 langchain-core
 langchain-google-vertexai
 langchain-community
+
+# Graph Processing
+sqlparse
 
 # LlamaIndex for document processing
 llama-index-core

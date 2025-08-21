@@ -36,6 +36,10 @@ class AppSettings(BaseSettings):
     celery_broker_url: str = Field(default="redis://localhost:6379/0", env="CELERY_BROKER_URL")
     celery_result_backend: str = Field(default="redis://localhost:6379/0", env="CELERY_RESULT_BACKEND")
     task_result_expires: int = Field(default=3600, env="TASK_RESULT_EXPIRES")
+    
+    # Spanner Graph settings - required for Graph RAG
+    spanner_instance_id: str = Field(..., env="SPANNER_INSTANCE_ID")
+    spanner_database_id: str = Field(..., env="SPANNER_DATABASE_ID")
 
     model_config = {
         "env_file": ".env",
