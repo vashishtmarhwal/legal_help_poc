@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from fastapi import HTTPException, status
 from vertexai.generative_models import GenerationConfig
@@ -19,7 +19,8 @@ async def extract_entities_with_ai(text: str, model) -> ExtractedInvoice:
 
     prompt = f"""Extract legal invoice data as JSON:
 
-Fields: vendor_name, invoice_number, invoice_date, professional_fees, discounts, tax_amount, total_amount, line_items[date, timekeeper_name, timekeeper_role, description, hours_worked, total_spent]
+Fields: vendor_name, invoice_number, invoice_date, professional_fees, discounts, tax_amount, total_amount,
+line_items[date, timekeeper_name, timekeeper_role, description, hours_worked, total_spent]
 
 Return single JSON object, null for missing fields.
 
@@ -45,7 +46,10 @@ Text:
             total_tokens = response.usage_metadata.total_token_count
             simple_counter.total_tokens += total_tokens
             simple_counter.request_count += 1
-            logger.info(f"Tokens tracked - extract_entities: {total_tokens}, Session Total: {simple_counter.total_tokens}")
+            logger.info(
+                f"Tokens tracked - extract_entities: {total_tokens}, "
+                f"Session Total: {simple_counter.total_tokens}"
+            )
 
         json_text = response.text.strip()
         for prefix in ["```json", "```", "json"]:
@@ -82,7 +86,9 @@ Text:
         )
 
 
-async def generate_contextual_answer(question: str, relevant_chunks: List[Dict], include_context: bool, model) -> Tuple[str, float]:
+async def generate_contextual_answer(
+    question: str, relevant_chunks: List[Dict], include_context: bool, model
+) -> Tuple[str, float]:
     if not model:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -104,31 +110,31 @@ async def generate_contextual_answer(question: str, relevant_chunks: List[Dict],
                 context_parts.append(text)
                 context_parts.append("")
 
-        context = "\n".join(context_parts) if context_parts else "No relevant context found."
+        context = (
+            "\n".join(context_parts) if context_parts else "No relevant context found."
+        )
 
         if include_context and relevant_chunks:
             prompt = f"""Legal assistant. Answer using provided context.
+                Context:
+                {context}
 
-Context:
-{context}
+                Question: {question}
 
-Question: {question}
+                Instructions:
+                • Base answer on context above
+                • State if information missing
+                • Cite sources when referencing
+                • Use professional language
 
-Instructions:
-• Base answer on context above
-• State if information missing
-• Cite sources when referencing
-• Use professional language
-
-Answer:"""
+                Answer:"""
         else:
             prompt = f"""Legal assistant. Answer using general legal knowledge.
+                Question: {question}
 
-Question: {question}
+                Use professional language. If uncertain, recommend consulting an attorney.
 
-Use professional language. If uncertain, recommend consulting an attorney.
-
-Answer:"""
+                Answer:"""
 
         generation_config = GenerationConfig(
             temperature=0.2,
@@ -147,14 +153,20 @@ Answer:"""
             total_tokens = response.usage_metadata.total_token_count
             simple_counter.total_tokens += total_tokens
             simple_counter.request_count += 1
-            logger.info(f"Tokens tracked - generate_answer: {total_tokens}, Session Total: {simple_counter.total_tokens}")
+            logger.info(
+                f"Tokens tracked - generate_answer: {total_tokens}, "
+                f"Session Total: {simple_counter.total_tokens}"
+            )
 
         answer = response.text.strip()
 
         confidence_score = 0.5
 
         if relevant_chunks:
-            avg_similarity = sum(chunk.get("similarity_score", 0.0) for chunk in relevant_chunks) / len(relevant_chunks)
+            avg_similarity = (
+                sum(chunk.get("similarity_score", 0.0) for chunk in relevant_chunks) / 
+                len(relevant_chunks)
+            )
             confidence_score += avg_similarity * 0.4
 
             if len(relevant_chunks) > 1:
@@ -171,5 +183,3 @@ Answer:"""
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Answer generation failed: {e!s}",
         )
-
-

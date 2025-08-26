@@ -7,7 +7,6 @@ from ..utils.helpers import calculate_file_hash
 
 logger = logging.getLogger(__name__)
 
-
 async def parse_pdf_with_blocks(file_bytes: bytes, filename: str) -> ParsedDocument:
     try:
         pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
@@ -54,7 +53,6 @@ async def parse_pdf_with_blocks(file_bytes: bytes, filename: str) -> ParsedDocum
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error parsing PDF: {e!s}",
         )
-
 
 async def extract_text_from_pdf(file_bytes: bytes) -> str:
     try:

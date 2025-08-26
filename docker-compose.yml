@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   legal-assistant-api:
     build:
@@ -42,10 +40,6 @@ services:
       - VECTOR_SEARCH_INDEX_ID=${VECTOR_SEARCH_INDEX_ID}
       - VECTOR_SEARCH_ENDPOINT_ID=${VECTOR_SEARCH_ENDPOINT_ID}
       - VECTOR_SEARCH_DEPLOYED_INDEX_ID=${VECTOR_SEARCH_DEPLOYED_INDEX_ID}
-      
-      # Spanner Graph Configuration
-      - SPANNER_INSTANCE_ID=${SPANNER_INSTANCE_ID}
-      - SPANNER_DATABASE_ID=${SPANNER_DATABASE_ID}
       
       # Optional: Logging Configuration
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

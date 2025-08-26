@@ -1,9 +1,8 @@
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field, field_validator
 
 from ..utils.helpers import parse_currency_string
-
 
 class TextBlock(BaseModel):
     x0: float = Field(..., description="Left X coordinate")
@@ -14,11 +13,9 @@ class TextBlock(BaseModel):
     block_type: int = Field(..., description="Block type from fitz")
     block_no: int = Field(..., description="Block number")
 
-
 class PageContent(BaseModel):
     page_number: int = Field(..., ge=0)
     blocks: List[TextBlock]
-
 
 class ParsedDocument(BaseModel):
     filename: str
@@ -27,14 +24,12 @@ class ParsedDocument(BaseModel):
     extraction_timestamp: datetime = Field(default_factory=datetime.utcnow)
     file_hash: str
 
-
 class BulkParseResponse(BaseModel):
     total_files: int
     successful_files: int
     failed_files: int
     results: List[ParsedDocument]
     errors: List[Dict[str, str]]
-
 
 class LineItem(BaseModel):
     date: Optional[str] = None
@@ -52,7 +47,6 @@ class LineItem(BaseModel):
         if isinstance(v, (int, float)):
             return float(v)
         return parse_currency_string(v)
-
 
 class ExtractedInvoice(BaseModel):
     vendor_name: Optional[str] = None
@@ -75,14 +69,12 @@ class ExtractedInvoice(BaseModel):
             return float(v)
         return parse_currency_string(v)
 
-
 class BulkEntityResponse(BaseModel):
     total_files: int
     successful_extractions: int
     failed_extractions: int
     results: List[ExtractedInvoice]
     errors: List[Dict[str, str]]
-
 
 class DocumentChunk(BaseModel):
     chunk_id: str
@@ -92,7 +84,6 @@ class DocumentChunk(BaseModel):
     chunk_index: int
     text: str
     chunk_size: int
-
 
 class VectorStoreUploadResult(BaseModel):
     filename: str
@@ -105,7 +96,6 @@ class VectorStoreUploadResult(BaseModel):
     duplicate_of_document_id: Optional[str] = None
     file_hash: Optional[str] = None
 
-
 class BulkVectorStoreResponse(BaseModel):
     total_files: int
     successful_files: int
@@ -114,7 +104,6 @@ class BulkVectorStoreResponse(BaseModel):
     total_chunks_processed: int
     results: List[VectorStoreUploadResult]
     errors: List[Dict[str, str]]
-
 
 class SourceReference(BaseModel):
     document_id: str
@@ -125,7 +114,6 @@ class SourceReference(BaseModel):
     similarity_score: float = Field(..., description="Semantic similarity score (0-1)")
     page_number: Optional[int] = None
 
-
 class QAResponse(BaseModel):
     question: str
     answer: str
@@ -135,10 +123,8 @@ class QAResponse(BaseModel):
     processing_time: float = Field(..., description="Processing time in seconds")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-
 class ClearVectorStoreResponse(BaseModel):
     message: str
     documents_deleted: int
     processing_time: float
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-

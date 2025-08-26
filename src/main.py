@@ -3,7 +3,6 @@ Built with FastAPI, LangChain, and Google Vertex AI
 """
 
 import logging
-import os
 from contextlib import asynccontextmanager
 
 import google.auth
@@ -13,7 +12,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from llama_index.core.node_parser import SimpleNodeParser
 from vertexai.generative_models import (
-    GenerationConfig,
     GenerativeModel,
     HarmBlockThreshold,
     HarmCategory,
@@ -23,10 +21,7 @@ from vertexai.generative_models import (
 from .api import api_router
 from .config import settings
 import src.dependencies as deps
-
-# Google Cloud credentials should be set via environment variables
-# GOOGLE_APPLICATION_CREDENTIALS should point to service account key file
-# GOOGLE_CLOUD_PROJECT should be set to your project ID
+from .services.extraction_db_service import extraction_db_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -46,12 +41,15 @@ async def lifespan(app: FastAPI):
                 credentials, project_id = google.auth.default()
                 logger.info("Google Cloud credentials loaded successfully")
             else:
-                logger.warning("Google Cloud credentials file not found - service will run with limited functionality")
+                logger.warning(
+                    "Google Cloud credentials file not found - "
+                    "service will run with limited functionality"
+                )
                 logger.info("To enable full functionality, provide valid service account credentials")
         except Exception as cred_error:
             logger.warning(f"Google Cloud credentials not available: {type(cred_error).__name__}")
             logger.warning("Service will run with limited functionality")
-        
+
         vertexai.init(project=settings.google_cloud_project, location=settings.location)
         logger.info(f"Vertex AI initialized (project={settings.google_cloud_project})")
 
@@ -116,6 +114,13 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Document processing initialization failed: {ve!s}")
             deps.vector_store_initialized = False
 
+        # Initialize database connection
+        try:
+            extraction_db_service.connect()
+            logger.info("Extraction database service initialized")
+        except Exception as db_error:
+            logger.warning(f"Database initialization failed: {db_error}")
+
         deps.is_initialized = True
 
     except Exception as e:
@@ -127,11 +132,17 @@ async def lifespan(app: FastAPI):
 
     logger.info("Shutting down Legal Document Assistant API...")
 
+    # Cleanup database connection
+    try:
+        extraction_db_service.disconnect()
+    except Exception as db_error:
+        logger.warning(f"Database cleanup failed: {db_error}")
+
 
 app = FastAPI(
     title="Legal Document Assistant API",
     description="API for parsing legal documents and extracting structured information",
-    version="3.1.0",
+    version="3.3.0",
     lifespan=lifespan,
 )
 

@@ -18,7 +18,7 @@ from .responses import (
 __all__ = [
     "QARequest",
     "TextBlock",
-    "PageContent", 
+    "PageContent",
     "ParsedDocument",
     "BulkParseResponse",
     "LineItem",

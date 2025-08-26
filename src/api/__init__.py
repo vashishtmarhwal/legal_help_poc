@@ -1,5 +1,7 @@
 from fastapi import APIRouter
-from .endpoints import health, parsing, extraction, qa, monitoring, vertex_vector_search
+from .endpoints import (
+    health, parsing, extraction, qa, monitoring, vertex_vector_search
+)
 
 api_router = APIRouter()
 

@@ -5,7 +5,6 @@ from ..config import settings
 
 security = HTTPBearer()
 
-
 def verify_admin_key(authorization: HTTPAuthorizationCredentials = Depends(security)):
     if not settings.admin_api_key:
         raise HTTPException(

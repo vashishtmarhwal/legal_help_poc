@@ -10,7 +10,6 @@ from ...utils.validators import validate_pdf_file
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
 @router.post("/upload-and-parse/", response_model=BulkParseResponse)
 async def upload_and_parse_pdfs(files: List[UploadFile] = File(...)):
     logger.info(f"Processing {len(files)} PDF files for parsing")

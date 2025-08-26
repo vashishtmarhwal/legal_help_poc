@@ -7,7 +7,6 @@ from ...monitoring.simple_token_counter import simple_counter
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
 @router.get("/monitoring/tokens/current")
 async def get_current_token_stats():
     """Get current session token statistics"""
@@ -24,5 +23,3 @@ async def get_current_token_stats():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve current token statistics",
         )
-
-

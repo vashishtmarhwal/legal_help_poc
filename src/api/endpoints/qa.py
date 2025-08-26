@@ -7,11 +7,12 @@ from ...dependencies import get_ai_model, get_vector_store_status
 from ...models.requests import QARequest
 from ...models.responses import QAResponse, SourceReference
 from ...services.ai_service import generate_contextual_answer
-from ...services.vector_search_qa_service import search_relevant_documents_vector_search, check_vector_search_readiness
+from ...services.vector_search_qa_service import (
+    search_relevant_documents_vector_search, check_vector_search_readiness
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
 
 @router.post("/ask/", response_model=QAResponse)
 async def ask_question(
@@ -21,20 +22,31 @@ async def ask_question(
 ):
     start_time = time.time()
 
-    logger.info(f"Processing Q&A request: '{qa_request.question[:100]}{'...' if len(qa_request.question) > 100 else ''}'")
+    logger.info(
+        f"Processing Q&A request: '{qa_request.question[:100]}"
+        f"{'...' if len(qa_request.question) > 100 else ''}'"
+    )
 
     # Check if Vector Search is ready for QA operations
     vector_search_ready = await check_vector_search_readiness()
-    
     if not vector_search_ready:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Vector Search service is not available. Please ensure the index is deployed and contains documents.",
+            detail=(
+                "Vector Search service is not available. Please ensure "
+                "the index is deployed and contains documents."
+            ),
         )
 
     try:
-        logger.info(f"Searching Vector Search index (max_sources={qa_request.max_sources}, threshold={qa_request.similarity_threshold})")
-        relevant_chunks, documents_searched = await search_relevant_documents_vector_search(
+        # Direct processing - no cache
+        logger.info(
+            f"Searching Vector Search index "
+            f"(max_sources={qa_request.max_sources}, "
+            f"threshold={qa_request.similarity_threshold})"
+        )
+        (relevant_chunks,
+         documents_searched) = await search_relevant_documents_vector_search(
             question=qa_request.question,
             max_sources=qa_request.max_sources,
             similarity_threshold=qa_request.similarity_threshold,
@@ -48,6 +60,7 @@ async def ask_question(
             model=model,
         )
 
+        # Create sources
         sources = []
         for chunk in relevant_chunks:
             text = chunk.get("text", "").strip()
@@ -74,7 +87,11 @@ async def ask_question(
 
         processing_time = time.time() - start_time
 
-        logger.info(f"Q&A completed: {len(sources)} sources, confidence={confidence_score:.2f}, time={processing_time:.2f}s")
+        logger.info(
+            f"Q&A completed: {len(sources)} sources, "
+            f"confidence={confidence_score:.2f}, "
+            f"time={processing_time:.2f}s"
+        )
 
         return QAResponse(
             question=qa_request.question,
@@ -94,5 +111,3 @@ async def ask_question(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Q&A processing failed: {e!s}",
         )
-
-
